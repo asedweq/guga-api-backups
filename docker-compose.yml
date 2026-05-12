@@ -1,0 +1,18 @@
+services:
+    csg:
+      build: .
+      image: csg:latest
+      container_name: csg
+      restart: unless-stopped
+      ports:
+        - "${CSG_PORT:-3000}:3000"
+      environment:
+        PORT: "3000"
+        # NODE_PROTOCOL: "http"   # 取消注释仅用于本地开发测试（节点为 localhost）
+      healthcheck:
+        test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
+        interval: 15s
+        timeout: 5s
+        retries: 3
+        start_period: 5s
+  
