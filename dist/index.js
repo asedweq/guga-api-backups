@@ -603,6 +603,13 @@ async function handleRequest(req, res) {
 }
 // ─── Server ───────────────────────────────────────────────────────────────────
 const server = node_http_1.default.createServer((req, res) => {
+    // Enable TCP keepalive on this socket immediately. This causes the OS to
+    // send TCP keepalive probes every ~30 s so NAT gateways / firewalls with
+    // idle-connection timeouts (commonly 60–90 s) don't silently drop the
+    // client↔CSG socket while we're blocked waiting for a long upstream
+    // response (e.g. 4-minute thinking-model inference). Without this, the
+    // client socket is dead by the time we try to write the response body.
+    req.socket?.setKeepAlive(true, 30_000);
     handleRequest(req, res).catch((err) => {
         log("ERROR", "unhandled error in request handler", { err: String(err) });
         if (!res.headersSent) {
@@ -625,6 +632,14 @@ const server = node_http_1.default.createServer((req, res) => {
 server.keepAliveTimeout = 0;
 server.requestTimeout = 0;
 server.headersTimeout = 0;
+// Blanket TCP keepalive for every accepted socket, including those reused
+// across requests on a keep-alive connection. setKeepAlive per-request above
+// is the primary guard; this is a belt-and-suspenders backup so sockets
+// created before the first request handler runs (TLS handshake phase) also
+// get probes.
+server.on("connection", (socket) => {
+    socket.setKeepAlive(true, 30_000);
+});
 server.listen(PORT, () => {
     log("INFO", "CSG listening", { port: PORT });
 });
